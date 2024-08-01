@@ -5,6 +5,8 @@
 __license__ = "GPL-2.0"
 __copyright__ = "Copyright (c) 2024, SaluteDevices"
 
+import hashlib
+import io
 import os
 import sys
 from ctypes import (LittleEndianStructure, c_byte, c_char, c_uint16, c_uint32,
@@ -247,8 +249,18 @@ class AmlImagePack:
                         backup_id=0,
                         reserve=(c_byte * 24)()
                     )
+                    sha1 = hashlib.sha1()
+                    while True:
+                        data = f.read(4096)
+                        if not data:
+                            break
+                        sha1.update(data)
+                    sha1sum = sha1.hexdigest()
+                    temp_file = io.StringIO(f'sha1sum {sha1sum}')
+                    temp_file.name = f.name
+                    f.seek(0)
                     _id += 1
-                    newitem = AmlImageItem(f, info_verify)
+                    newitem = AmlImageItem(temp_file, info_verify)
                     self._items.append(newitem)
 
         self._iscfg = True
