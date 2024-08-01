@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from struct import pack, unpack
 
 import usb_backend
+import usb
 
 USB_BACKEND = usb_backend.get_backend()
 
@@ -770,5 +771,7 @@ def get_burn_steps(args, shared_data, aml_img):
 def do_optimus_burn(args, aml_img):
     shared_data = SharedData()
     burn_steps = get_burn_steps(args, shared_data, aml_img)
+    for b in burn_steps:
+        print(b)
 
     do_burn(burn_steps)
