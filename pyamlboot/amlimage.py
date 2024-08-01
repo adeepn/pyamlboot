@@ -5,7 +5,6 @@
 __license__ = "GPL-2.0"
 __copyright__ = "Copyright (c) 2024, SaluteDevices"
 
-import io
 import os
 import sys
 from ctypes import (LittleEndianStructure, c_byte, c_char, c_uint16, c_uint32,
@@ -234,6 +233,24 @@ class AmlImagePack:
                 f = open(full_file_path, "rb")  # Using an in-memory file for demonstration
                 newitem = AmlImageItem(f, info)
                 self._items.append(newitem)
+                if info.verify:
+                    info_verify = AmlImgItemInfoV2(
+                        id=0,  # Assuming 'id' and other attributes as 0 or default values for now
+                        file_type=0x00 if attributes['file_type'] == 'normal' else 0xfe,
+                        cur_offset=0,
+                        offset_in_img=0,
+                        size=file_size,
+                        main_type='VERIFY'.encode('utf-8'),
+                        sub_type=attributes['sub_type'].encode('utf-8'),
+                        verify=0,
+                        is_backup=0,
+                        backup_id=0,
+                        reserve=(c_byte * 24)()
+                    )
+                    _id += 1
+                    newitem = AmlImageItem(f, info_verify)
+                    self._items.append(newitem)
+
         self._iscfg = True
         self._f = file
         return self._items
