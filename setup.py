@@ -6,12 +6,12 @@ import setuptools
 files = ["../files/*", "../files/*/*"]
 
 setuptools.setup(name="pyamlboot",
-    version="1.0.0-dev",
+    version="1.0.0-dev1",
     author="Neil Armstrong",
     author_email='superna9999@gmail.com',
     description="Amlogic SoC USB Boot utility",
     url='https://github.com/adeepn/pyamlboot',
-    packages=['pyamlboot', 'socid'],
+    packages=['pyamlboot'],
     scripts=['boot.py', 'boot-g12.py', 'runKernel.py', 'socid.py'],
     license="Apache 2.0 OR MIT",
     install_requires=['pyusb', 'setuptools'],
