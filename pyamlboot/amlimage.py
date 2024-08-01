@@ -199,7 +199,7 @@ class AmlImagePack:
         current_section = None
         base_path = os.path.dirname(img_name)
 
-        file = open(img_name, 'rb')
+        file = open(img_name, 'r')
         _id = 0
         for line in file:
             line = line.strip()
