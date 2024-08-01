@@ -256,7 +256,9 @@ class AmlImagePack:
                             break
                         sha1.update(data)
                     sha1sum = sha1.hexdigest()
-                    temp_file = io.StringIO(f'sha1sum {sha1sum}')
+                    sha_text = f'sha1sum {sha1sum}'
+                    # temp_file = io.StringIO()
+                    temp_file = io.BytesIO(sha_text.encode('utf-8'))
                     temp_file.name = f.name
                     f.seek(0)
                     _id += 1
