@@ -32,7 +32,8 @@ class _LibUSB:
     def _stub(self, *args, **kwargs):
         pass
 
-    def _get_configuration(self, dev_handle):
+    @staticmethod
+    def _get_configuration(dev_handle):
         return 1
 
     def __getattr__(self, item):

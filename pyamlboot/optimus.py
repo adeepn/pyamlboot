@@ -22,7 +22,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from struct import pack, unpack
 
-import usb_backend
+from . import usb_backend
 import usb
 
 USB_BACKEND = usb_backend.get_backend()
@@ -37,13 +37,17 @@ class TplCmdError(Exception):
 
 
 class BurnStepBase:
+    _dev = None
+
     def __init__(self, shared_data):
         self._shared_data = shared_data
         self._title = 'UNKNOWN'
 
-    def _wait_device(self, for_connect=True, timeout=10.0):
+    @staticmethod
+    def _wait_device(for_connect=True, timeout=10.0):
         start_time = time.time()
         while True:
+            # noinspection PyBroadException
             try:
                 pyamlboot.AmlogicSoC(usb_backend=USB_BACKEND)
             except Exception:
@@ -597,7 +601,6 @@ class BurnStepCommand(BurnStepBase):
 
 
 class Platform:
-
     @dataclass
     class Parser:
         pattern: str
@@ -616,28 +619,28 @@ class Platform:
 
     def __init__(self, data):
         parsers = [
-            Platform.Parser('Platform:',       self._cfg_parse_int,     True,  None),
-            Platform.Parser('DDRLoad:',        self._cfg_parse_int,     True,  None),
-            Platform.Parser('DDRRun:',         self._cfg_parse_int,     True,  None),
-            Platform.Parser('UbootLoad:',      self._cfg_parse_int,     False, '0'),
-            Platform.Parser('UbootRun:',       self._cfg_parse_int,     False, '0'),
-            Platform.Parser('BinPara:',        self._cfg_parse_int,     False, '0'),
-            Platform.Parser('Uboot_down:',     self._cfg_parse_int,     False, '0'),
-            Platform.Parser('Uboot_decomp:',   self._cfg_parse_int,     False, '0'),
-            Platform.Parser('Uboot_enc_down:', self._cfg_parse_int,     False, '0'),
-            Platform.Parser('Uboot_enc_run:',  self._cfg_parse_int,     False, '0'),
-            Platform.Parser('Uboot:',          self._cfg_parse_int,     False, '0'),
-            Platform.Parser('Encrypt_reg:',    self._cfg_parse_int,     False, '0'),
-            Platform.Parser('bl2ParaAddr=',    self._cfg_parse_int,     False, '0'),
-            Platform.Parser('Control0=',       self._cfg_parse_control, True,  None),
-            Platform.Parser('Control1=',       self._cfg_parse_control, True,  None),
-            Platform.Parser('Encrypt_reg0=',   self._cfg_parse_int,     False, '0'),
-            Platform.Parser('Encrypt_reg1=',   self._cfg_parse_int,     False, '0'),
-            Platform.Parser('Encrypt_reg2=',   self._cfg_parse_int,     False, '0'),
-            Platform.Parser('needPassword=',   self._cfg_parse_int,     False, '0'),
-            Platform.Parser('DDRSize:',        self._cfg_parse_int,     False, '0'),
-            Platform.Parser('enc_chip_id1:',   self._cfg_parse_int,     False, '0'),
-            Platform.Parser('enc_chip_id2:',   self._cfg_parse_int,     False, '0'),
+            Platform.Parser('Platform:', self._cfg_parse_int, True, None),
+            Platform.Parser('DDRLoad:', self._cfg_parse_int, True, None),
+            Platform.Parser('DDRRun:', self._cfg_parse_int, True, None),
+            Platform.Parser('UbootLoad:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('UbootRun:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('BinPara:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('Uboot_down:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('Uboot_decomp:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('Uboot_enc_down:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('Uboot_enc_run:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('Uboot:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('Encrypt_reg:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('bl2ParaAddr=', self._cfg_parse_int, False, '0'),
+            Platform.Parser('Control0=', self._cfg_parse_control, True, None),
+            Platform.Parser('Control1=', self._cfg_parse_control, True, None),
+            Platform.Parser('Encrypt_reg0=', self._cfg_parse_int, False, '0'),
+            Platform.Parser('Encrypt_reg1=', self._cfg_parse_int, False, '0'),
+            Platform.Parser('Encrypt_reg2=', self._cfg_parse_int, False, '0'),
+            Platform.Parser('needPassword=', self._cfg_parse_int, False, '0'),
+            Platform.Parser('DDRSize:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('enc_chip_id1:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('enc_chip_id2:', self._cfg_parse_int, False, '0'),
         ]
 
         for cfg_item in data.split('\n'):
