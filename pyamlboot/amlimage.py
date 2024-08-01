@@ -197,7 +197,7 @@ class AmlImagePack:
         self._items = []
 
         current_section = None
-        base_path = os.path.dirname(imgcfg)
+        base_path = os.path.dirname(img_name)
 
         file = open(img_name, 'rb')
         _id = 0
