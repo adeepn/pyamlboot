@@ -26,7 +26,7 @@ REQ_WR_LARGE_MEM = 0x11
 REQ_RD_LARGE_MEM = 0x12
 REQ_IDENTIFY_HOST = 0x20
 
-REQ_TPL_CMD    = 0x30
+REQ_TPL_CMD = 0x30
 REQ_TPL_STAT = 0x31
 
 REQ_WRITE_MEDIA = 0x32
@@ -52,12 +52,16 @@ WRITE_MEDIA_CHEKSUM_ALG_NONE = 0x00ee
 WRITE_MEDIA_CHEKSUM_ALG_ADDSUM = 0x00ef
 WRITE_MEDIA_CHEKSUM_ALG_CRC32 = 0x00f0
 
+
 class AmlogicSoC(object):
     """Represents an Amlogic SoC in USB boot Mode"""
 
     def __init__(self, idVendor=0x1b8e, idProduct=0xc003, usb_backend=None):
         """Init with vendor/product IDs"""
 
+        self._idVendor = idVendor
+        self._idProduct = idProduct
+        self._usb_backend = usb_backend
         self.dev = usb.core.find(idVendor=idVendor,
                                  idProduct=idProduct,
                                  backend=usb_backend)
@@ -65,16 +69,23 @@ class AmlogicSoC(object):
         if self.dev is None:
             raise ValueError('Device not found')
 
+    def reinit(self):
+
+        self.dev = usb.core.find(idVendor=self._idVendor,
+                                 idProduct=self._idProduct, bus=self.dev.bus, address=self.dev.address, backend=self._usb_backend)
+        if self.dev is None:
+            raise ValueError("Device not found")
+
     def writeSimpleMemory(self, address, data):
         """Write a chunk of data to memory"""
         if len(data) > 64:
             raise ValueError('Maximum size of 64bytes')
 
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_WRITE_MEM,
-                               wValue = address >> 16,
-                               wIndex = address & 0xffff,
-                               data_or_wLength = data)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_WRITE_MEM,
+                               wValue=address >> 16,
+                               wIndex=address & 0xffff,
+                               data_or_wLength=data)
 
     def writeMemory(self, address, data):
         """Write some data to memory"""
@@ -82,7 +93,7 @@ class AmlogicSoC(object):
         offset = 0
 
         while length:
-            self.writeSimpleMemory(address + offset, data[offset:offset+64])
+            self.writeSimpleMemory(address + offset, data[offset:offset + 64])
             if length > 64:
                 length = length - 64
             else:
@@ -97,11 +108,11 @@ class AmlogicSoC(object):
         if length > 64:
             raise ValueError('Maximum size of 64bytes')
 
-        ret = self.dev.ctrl_transfer(bmRequestType = 0xc0,
-                                     bRequest = REQ_READ_MEM,
-                                     wValue = address >> 16,
-                                     wIndex = address & 0xffff,
-                                     data_or_wLength = length)
+        ret = self.dev.ctrl_transfer(bmRequestType=0xc0,
+                                     bRequest=REQ_READ_MEM,
+                                     wValue=address >> 16,
+                                     wIndex=address & 0xffff,
+                                     data_or_wLength=length)
 
         return ret
 
@@ -126,11 +137,11 @@ class AmlogicSoC(object):
         """UNTESTED: Modify memory with a pattern"""
         controlData = pack('<IIII', address1, data, mask, address2)
 
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_MODIFY_MEM,
-                               wValue = opcode,
-                               wIndex = 0,
-                               data_or_wLength = controlData)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_MODIFY_MEM,
+                               wValue=opcode,
+                               wIndex=0,
+                               data_or_wLength=controlData)
 
     def readReg(self, address):
         """Read value at address"""
@@ -176,11 +187,11 @@ class AmlogicSoC(object):
         else:
             data = address
         controlData = pack('<I', data)
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_RUN_IN_ADDR,
-                               wValue = address >> 16,
-                               wIndex = address & 0xffff,
-                               data_or_wLength = controlData)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_RUN_IN_ADDR,
+                               wValue=address >> 16,
+                               wIndex=address & 0xffff,
+                               data_or_wLength=controlData)
 
     # writeAux
     # readAux
@@ -200,23 +211,23 @@ class AmlogicSoC(object):
         offset = 0
 
         cfg = self.dev.get_active_configuration()
-        intf = cfg[(0,0)]
+        intf = cfg[(0, 0)]
         ep = usb.util.find_descriptor(
-                        intf,
-                        # match the first OUT endpoint
-                        custom_match = \
-                        lambda e: \
-                        usb.util.endpoint_direction(e.bEndpointAddress) == \
-                        usb.util.ENDPOINT_OUT)
+            intf,
+            # match the first OUT endpoint
+            custom_match= \
+                lambda e: \
+                    usb.util.endpoint_direction(e.bEndpointAddress) == \
+                    usb.util.ENDPOINT_OUT)
 
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_WR_LARGE_MEM,
-                               wValue = blockLength,
-                               wIndex = blockCount,
-                               data_or_wLength = controlData)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_WR_LARGE_MEM,
+                               wValue=blockLength,
+                               wIndex=blockCount,
+                               data_or_wLength=controlData)
 
         while blockCount > 0:
-            ep.write(data[offset:offset+blockLength], 1000)
+            ep.write(data[offset:offset + blockLength], 1000)
             offset = offset + blockLength
             blockCount = blockCount - 1
 
@@ -235,7 +246,7 @@ class AmlogicSoC(object):
                 writeLength = len(data) - offset
             else:
                 writeLength = (MAX_LARGE_BLOCK_COUNT * blockLength)
-            self._writeLargeMemory(address+offset, data[offset:offset+writeLength], \
+            self._writeLargeMemory(address + offset, data[offset:offset + writeLength], \
                                    blockLength, appendZeros)
             offset = offset + writeLength
             transferCount = transferCount - 1
@@ -254,20 +265,20 @@ class AmlogicSoC(object):
         data = bytes()
 
         cfg = self.dev.get_active_configuration()
-        intf = cfg[(0,0)]
+        intf = cfg[(0, 0)]
         ep = usb.util.find_descriptor(
-                        intf,
-                        # match the first OUT endpoint
-                        custom_match = \
-                        lambda e: \
-                        usb.util.endpoint_direction(e.bEndpointAddress) == \
-                        usb.util.ENDPOINT_IN)
+            intf,
+            # match the first OUT endpoint
+            custom_match= \
+                lambda e: \
+                    usb.util.endpoint_direction(e.bEndpointAddress) == \
+                    usb.util.ENDPOINT_IN)
 
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_RD_LARGE_MEM,
-                               wValue = blockLength,
-                               wIndex = blockCount,
-                               data_or_wLength = controlData)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_RD_LARGE_MEM,
+                               wValue=blockLength,
+                               wIndex=blockCount,
+                               data_or_wLength=controlData)
 
         while blockCount > 0:
             data += ep.read(blockLength, 100)
@@ -291,8 +302,8 @@ class AmlogicSoC(object):
                 readLength = length - offset
             else:
                 readLength = (MAX_LARGE_BLOCK_COUNT * blockLength)
-            data += self._readLargeMemory(address+offset, readLength, \
-                                                blockLength, appendZeros)
+            data += self._readLargeMemory(address + offset, readLength, \
+                                          blockLength, appendZeros)
             offset = offset + readLength
             transferCount = transferCount - 1
 
@@ -300,10 +311,10 @@ class AmlogicSoC(object):
 
     def identify(self):
         """Identify the ROM Protocol"""
-        ret = self.dev.ctrl_transfer(bmRequestType = 0xc0,
-                                     bRequest = REQ_IDENTIFY_HOST,
-                                     wValue = 0, wIndex = 0,
-                                     data_or_wLength = 8)
+        ret = self.dev.ctrl_transfer(bmRequestType=0xc0,
+                                     bRequest=REQ_IDENTIFY_HOST,
+                                     wValue=0, wIndex=0,
+                                     data_or_wLength=8)
 
         return ''.join([chr(x) for x in ret])
 
@@ -315,10 +326,10 @@ class AmlogicSoC(object):
         if len(terminated_cmd) >= 128:
             raise ValueError("TPL command must be shorter than 127 characters")
 
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_TPL_CMD,
-                               wValue = 0, wIndex = subcode,
-                               data_or_wLength = terminated_cmd)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_TPL_CMD,
+                               wValue=0, wIndex=subcode,
+                               data_or_wLength=terminated_cmd)
 
     # tplStat
     def tplStat(self, timeout=None):
@@ -335,48 +346,48 @@ class AmlogicSoC(object):
         else:
             controlData = password
 
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_PASSWORD,
-                               wValue = 0, wIndex = 0,
-                               data_or_wLength = controlData)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_PASSWORD,
+                               wValue=0, wIndex=0,
+                               data_or_wLength=controlData)
 
     def nop(self):
         """No-Operation, for testing purposes"""
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_NOP,
-                               wValue = 0, wIndex = 0,
-                               data_or_wLength = None)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_NOP,
+                               wValue=0, wIndex=0,
+                               data_or_wLength=None)
 
     def getBootAMLC(self):
         """Read BL2 Boot AMLC Data Request"""
 
         cfg = self.dev.get_active_configuration()
-        intf = cfg[(0,0)]
+        intf = cfg[(0, 0)]
         epout = usb.util.find_descriptor(
-                        intf,
-                        # match the first OUT endpoint
-                        custom_match = \
-                        lambda e: \
-                        usb.util.endpoint_direction(e.bEndpointAddress) == \
-                        usb.util.ENDPOINT_OUT)
+            intf,
+            # match the first OUT endpoint
+            custom_match= \
+                lambda e: \
+                    usb.util.endpoint_direction(e.bEndpointAddress) == \
+                    usb.util.ENDPOINT_OUT)
         epin = usb.util.find_descriptor(
-                        intf,
-                        # match the first OUT endpoint
-                        custom_match = \
-                        lambda e: \
-                        usb.util.endpoint_direction(e.bEndpointAddress) == \
-                        usb.util.ENDPOINT_IN)
+            intf,
+            # match the first OUT endpoint
+            custom_match= \
+                lambda e: \
+                    usb.util.endpoint_direction(e.bEndpointAddress) == \
+                    usb.util.ENDPOINT_IN)
 
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_GET_AMLC,
-                               wValue = AMLC_AMLS_BLOCK_LENGTH,
-                               wIndex = 0,
-                               data_or_wLength = None)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_GET_AMLC,
+                               wValue=AMLC_AMLS_BLOCK_LENGTH,
+                               wIndex=0,
+                               data_or_wLength=None)
 
         data = epin.read(AMLC_AMLS_BLOCK_LENGTH, 100)
         (tag, length, offset) = unpack('<4s4xII', data[0:16])
 
-        if not "AMLC" in ''.join(map(chr,tag)):
+        if not "AMLC" in ''.join(map(chr, tag)):
             raise ValueError('Invalid AMLC Request %s' % data[0:16])
 
         # Ack the request
@@ -394,27 +405,27 @@ class AmlogicSoC(object):
             blockCount = blockCount + 1
 
         cfg = self.dev.get_active_configuration()
-        intf = cfg[(0,0)]
+        intf = cfg[(0, 0)]
         epout = usb.util.find_descriptor(
-                        intf,
-                        # match the first OUT endpoint
-                        custom_match = \
-                        lambda e: \
-                        usb.util.endpoint_direction(e.bEndpointAddress) == \
-                        usb.util.ENDPOINT_OUT)
+            intf,
+            # match the first OUT endpoint
+            custom_match= \
+                lambda e: \
+                    usb.util.endpoint_direction(e.bEndpointAddress) == \
+                    usb.util.ENDPOINT_OUT)
         epin = usb.util.find_descriptor(
-                        intf,
-                        # match the first OUT endpoint
-                        custom_match = \
-                        lambda e: \
-                        usb.util.endpoint_direction(e.bEndpointAddress) == \
-                        usb.util.ENDPOINT_IN)
+            intf,
+            # match the first OUT endpoint
+            custom_match= \
+                lambda e: \
+                    usb.util.endpoint_direction(e.bEndpointAddress) == \
+                    usb.util.ENDPOINT_IN)
 
-        self.dev.ctrl_transfer(bmRequestType = 0x40,
-                               bRequest = REQ_WRITE_AMLC,
-                               wValue = int(offset / AMLC_AMLS_BLOCK_LENGTH),
-                               wIndex = writeLength - 1,
-                               data_or_wLength = None)
+        self.dev.ctrl_transfer(bmRequestType=0x40,
+                               bRequest=REQ_WRITE_AMLC,
+                               wValue=int(offset / AMLC_AMLS_BLOCK_LENGTH),
+                               wIndex=writeLength - 1,
+                               data_or_wLength=None)
 
         while blockCount > 0:
             remain = writeLength - dataOffset
@@ -422,14 +433,14 @@ class AmlogicSoC(object):
                 blockLength = AMLC_MAX_BLOCK_LENGTH
             else:
                 blockLength = remain
-            epout.write(data[dataOffset:dataOffset+blockLength], 1000)
+            epout.write(data[dataOffset:dataOffset + blockLength], 1000)
             dataOffset = dataOffset + blockLength
             blockCount = blockCount - 1
 
         # Wait for Ack
         data = epin.read(16, 1000)
 
-        if not "OKAY" in ''.join(map(chr,data[0:4])):
+        if not "OKAY" in ''.join(map(chr, data[0:4])):
             raise ValueError('Invalid AMLC Data Write Ack %s' % data)
 
     def _amlsChecksum(self, data):
@@ -441,11 +452,11 @@ class AmlogicSoC(object):
         while offset < len(data):
             left = len(data) - offset
             if left >= 4:
-                val = unpack('<I', data[offset:offset+4])[0]
+                val = unpack('<I', data[offset:offset + 4])[0]
             elif left >= 3:
-                val = unpack('<I', data[offset:offset+4].ljust(4, b'\x00'))[0] & 0xffffff
+                val = unpack('<I', data[offset:offset + 4].ljust(4, b'\x00'))[0] & 0xffffff
             elif left >= 2:
-                val = unpack('<H', data[offset:offset+2])[0]
+                val = unpack('<H', data[offset:offset + 2])[0]
             else:
                 val = unpack('<B', data[offset])[0]
             offset = offset + 4
@@ -466,7 +477,7 @@ class AmlogicSoC(object):
                 writeLength = dataLen - offset
             else:
                 writeLength = AMLC_MAX_TRANSFERT_LENGTH
-            self._writeAMLCData(offset, data[offset:offset+writeLength])
+            self._writeAMLCData(offset, data[offset:offset + writeLength])
             offset = offset + writeLength
             transferCount = transferCount - 1
 
@@ -477,13 +488,13 @@ class AmlogicSoC(object):
 
     @staticmethod
     def _endpoint_match_in(ep):
-        return usb.util.endpoint_direction(ep.bEndpointAddress) ==\
-               usb.util.ENDPOINT_IN
+        return usb.util.endpoint_direction(ep.bEndpointAddress) == \
+            usb.util.ENDPOINT_IN
 
     @staticmethod
     def _endpoint_match_out(ep):
-        return usb.util.endpoint_direction(ep.bEndpointAddress) ==\
-               usb.util.ENDPOINT_OUT
+        return usb.util.endpoint_direction(ep.bEndpointAddress) == \
+            usb.util.ENDPOINT_OUT
 
     def readMedia(self, size, timeout=None):
         """Read data from storage
@@ -563,11 +574,11 @@ class AmlogicSoC(object):
         if len(terminated_cmd) >= 128:
             raise ValueError("Bulk command must be shorter than 127 characters")
 
-        self.dev.ctrl_transfer(bmRequestType = request_type,
-                               bRequest = REQ_BULKCMD,
-                               wValue = 0, # Ignored
-                               wIndex = 2, # Ignored
-                               data_or_wLength = command + '\0')
+        self.dev.ctrl_transfer(bmRequestType=request_type,
+                               bRequest=REQ_BULKCMD,
+                               wValue=0,  # Ignored
+                               wIndex=2,  # Ignored
+                               data_or_wLength=command + '\0')
 
         if read_status:
             return self.bulkCmdStat(timeout)
