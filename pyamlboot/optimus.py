@@ -43,13 +43,14 @@ class BurnStepBase:
         self._shared_data = shared_data
         self._title = 'UNKNOWN'
 
-    @staticmethod
-    def _wait_device(for_connect=True, timeout=10.0):
+    def _wait_device(self, for_connect=True, timeout=10.0):
+        if not self._dev:
+            raise ValueError('Device not initialized')
         start_time = time.time()
         while True:
             # noinspection PyBroadException
             try:
-                pyamlboot.AmlogicSoC(usb_backend=USB_BACKEND)
+                self._dev.reinit()
             except Exception:
                 if not for_connect:
                     break
@@ -474,7 +475,7 @@ class BurnStepDownloadUboot(BurnStepDownloadBase):
         self._wait_device()
         time.sleep(5)
 
-        self._dev = pyamlboot.AmlogicSoC(usb_backend=USB_BACKEND)
+        self._dev.reinit()
         socid = SocId(self._dev.identify())
         return True
 
@@ -684,15 +685,22 @@ class SharedData:
         return self._is_secure
 
 
-def do_burn(burn_steps):
-    reopen_dev = True
+def do_burn(burn_steps, dev=None):
+    if not dev:
+        try:
+            dev = pyamlboot.AmlogicSoC(usb_backend=USB_BACKEND)
+        except usb.core.NoBackendError:
+            logging.error('Please install libusb')
+            raise
+
+    reopen_dev = False
 
     for step in burn_steps:
         if reopen_dev:
             try:
-                dev = pyamlboot.AmlogicSoC(usb_backend=USB_BACKEND)
-            except usb.core.NoBackendError:
-                logging.error('Please install libusb')
+                dev.reinit()
+            except ValueError as e:
+                logging.error(e)
                 raise
 
         step.header()
