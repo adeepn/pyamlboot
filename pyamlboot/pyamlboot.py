@@ -7,7 +7,7 @@ Amlogic USB Boot Protocol Library
 
 @author: Neil Armstrong <narmstrong@baylibre.com>
 """
-
+import logging
 import string
 import os
 import usb.core
@@ -65,16 +65,38 @@ class AmlogicSoC(object):
         self.dev = usb.core.find(idVendor=idVendor,
                                  idProduct=idProduct,
                                  backend=usb_backend)
-
         if self.dev is None:
             raise ValueError('Device not found')
+        if not self.dev.address or not self.dev.bus:
+            raise ValueError('Device address or bus not found')
+        self._usb_address = self.dev.address
+        self._usb_bus = self.dev.bus
+        self._usb_port = self.dev.port_number
 
     def reinit(self):
+        logging.debug("Reinit usb connection")
+        if self._usb_port:
+            self.dev = usb.core.find(idVendor=self._idVendor,
+                                     idProduct=self._idProduct, bus=self._usb_bus, port_number=self._usb_port,
+                                     backend=self._usb_backend)
+        else:
+            self.dev = usb.core.find(idVendor=self._idVendor,
+                                     idProduct=self._idProduct, bus=self._usb_bus, address=self._usb_address,
+                                     backend=self._usb_backend)
 
-        self.dev = usb.core.find(idVendor=self._idVendor,
-                                 idProduct=self._idProduct, bus=self.dev.bus, address=self.dev.address, backend=self._usb_backend)
+        if self.dev is None:
+            logging.warning("Reinit usb connection fail. trying init")
+            self.dev = usb.core.find(idVendor=self._idVendor,
+                                     idProduct=self._idProduct, backend=self._usb_backend)
+
         if self.dev is None:
             raise ValueError("Device not found")
+
+        self._usb_address = self.dev.address
+        self._usb_bus = self.dev.bus
+        self._usb_port = self.dev.port_number
+
+        logging.debug(f"Reinit {self._idVendor} {self._idProduct} {self._usb_address} {self._usb_bus}")
 
     def writeSimpleMemory(self, address, data):
         """Write a chunk of data to memory"""
