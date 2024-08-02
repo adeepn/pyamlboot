@@ -247,17 +247,19 @@ class BurnStepDownloadBase(BurnStepBase):
             raise ValueError(f'The image does not contain any {p}signed items')
 
     def _write_para(self, params):
-        self._dev.writeLargeMemory(self._platform.bl2ParaAddr,
-                                   params,
-                                   blockLength=len(params))
+        if self._platform.bl2ParaAddr:
+            self._dev.writeLargeMemory(self._platform.bl2ParaAddr,
+                                       params,
+                                       blockLength=len(params))
 
     def _check_para(self, magic):
-        data = self._dev.readLargeMemory(self._platform.bl2ParaAddr, 0x200)
-        para_magic = unpack('<I', data[:4])[0]
-        if para_magic != magic:
-            raise Exception(f'Fail read para: {para_magic:x}')
-
-        return data
+        if self._platform.bl2ParaAddr:
+            data = self._dev.readLargeMemory(self._platform.bl2ParaAddr, 0x200)
+            para_magic = unpack('<I', data[:4])[0]
+            if para_magic != magic:
+                raise Exception(f'Fail read para: {para_magic:x}')
+            return data
+        return None
 
     def _run_in_address(self, address):
         keep_power = False
