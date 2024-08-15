@@ -242,11 +242,13 @@ class BurnStepDownloadBase(BurnStepBase):
             self._part += '_ENC'
 
         self._cur_img = self._images.get((self._path, self._part))
+        logging.debug(f'BurnStepDownloadBase _update_part: Current image: {self._path} {self._part} {self._cur_img.size}')
         if not self._cur_img:
             p = '' if self._shared_data.is_secure() else 'non'
             raise ValueError(f'The image does not contain any {p}signed items')
 
     def _write_para(self, params):
+        logging.debug(f'BurnStepDownloadBase: _write_para: at {self._platform.bl2ParaAddr:x} {len(params)} {params}')
         if self._platform.bl2ParaAddr:
             self._dev.writeLargeMemory(self._platform.bl2ParaAddr,
                                        params,
@@ -321,6 +323,46 @@ class BurnStepDownloadBase(BurnStepBase):
 
         assert written >= size, f'{written} >= {size}'
 
+    def _download_amlc_data(self, img, address, size=0):
+        prev_length = -1
+        prev_offset = -1
+        seq = 0
+        written = 0
+
+        img.seek(0, 0)
+
+        if not size or size > img.size():
+            size = img.size()
+
+        logging.info(
+            f'Download AMLC data {img.sub_type()} ({size} bytes) at {address:x}')
+
+        while True:
+            (length, offset) = self._dev.getBootAMLC()
+
+            logging.info(f'AMLC dataSize={length}, offset={offset}, seq={seq} old: {prev_length} {prev_offset}')
+            if length == prev_length and offset == prev_offset:
+                logging.debug(f'_download_amlc_data: AMLC [BL2 END] loaded: {written} filesize: {size}')
+                break
+
+            prev_length = length
+            prev_offset = offset
+
+            logging.debug("_download_amlc_data: AMLC dataSize=%d, offset=%d, seq=%d..." % (length, offset, seq))
+            img.seek(offset, 0)
+            buf = img.read(length)
+            if not buf:
+                raise Exception('Unexpected end of file')
+
+            self._dev.writeAMLCData(seq, offset, buf)
+            logging.debug("_download_amlc_data: AMLC part load [DONE]")
+
+            seq = seq + 1
+            written += length
+
+        if written < size:
+            logging.info(f'AMLC written {written} < {size}')
+
 
 class BurnStepDownloadSPL(BurnStepDownloadBase):
     def __init__(self, shared_data, *args, **kwargs):
@@ -337,6 +379,7 @@ class BurnStepDownloadSPL(BurnStepDownloadBase):
 
     def do(self, dev):
         self._dev = dev
+        logging.info('BurnStepDownloadSPL: do: Download SPL')
 
         socid = SocId(self._dev.identify())
 
@@ -350,14 +393,19 @@ class BurnStepDownloadSPL(BurnStepDownloadBase):
             raise RuntimeError(f'Unexpected stage: {socid}')
 
         self._update_part()
+        logging.debug('BurnStepDownloadSPL: do: Write regs')
         self._write_regs()
+        logging.debug(f'BurnStepDownloadSPL: do: download_file {self._cur_img.size} {self._platform.DDRLoad} {self._platform.DDRSize}')
         self._download_file(self._cur_img,
                             self._platform.DDRLoad,
                             size=self._platform.DDRSize)
+        logging.debug('BurnStepDownloadSPL: do: Written DDR. Send para')
         self._write_para(self._params_buf)
+        logging.debug('BurnStepDownloadSPL: do: Run in address')
         self._run_in_address(self._platform.DDRRun)
 
-        time.sleep(8)
+        time.sleep(5)
+        logging.debug('BurnStepDownloadSPL: do: after: Run in address')
 
         socid = SocId(self._dev.identify())
         if socid.stage_minor == SocId.STAGE_MINOR_IPL:
@@ -381,6 +429,7 @@ class BurnStepDownloadUboot(BurnStepDownloadBase):
                          path='USB',
                          part='UBOOT')
         self._title = 'Download UBOOT'
+        self._ddr_img = None
 
     def _run(self):
         socid = SocId(self._dev.identify())
@@ -391,7 +440,8 @@ class BurnStepDownloadUboot(BurnStepDownloadBase):
             addr = self._platform.bl2ParaAddr
             self._run_in_address(addr)
 
-    def _chksum(self, data):
+    @staticmethod
+    def _chksum(data):
         checksum = 0
         offset = 0
         uint32_max = (1 << 32)
@@ -412,6 +462,7 @@ class BurnStepDownloadUboot(BurnStepDownloadBase):
         return checksum
 
     def _update_ddr(self):
+        logging.info('BurnStepDownloadUboot: _update_ddr')
         self._cur_img.seek(0, 0)
         chksum = self._chksum(self._cur_img.read())
         self._cur_img.seek(0, 0)
@@ -449,29 +500,41 @@ class BurnStepDownloadUboot(BurnStepDownloadBase):
             logging.info('No need download UBOOT')
             return
 
-        if socid.stage_minor != 0 or \
-                (socid.stage_major != 0 and socid.stage_minor != 8):
+        # 0 8 - gxl/axg, 1 8 - sm1
+        logging.error(f'BurnStepDownloadUboot: do: soc state {socid.stage_major} {socid.stage_minor}')
+        if socid.stage_minor != 0 and \
+                (socid.stage_major != 0 and socid.stage_minor != SocId.STAGE_MINOR_SPL) and \
+                (socid.stage_major != 1 and socid.stage_minor != SocId.STAGE_MINOR_SPL):
             raise NotImplementedError()
 
-        self._download_file(self._cur_img, self._platform.UbootLoad)
-        time.sleep(0.2)
+        if socid.stage_major == 1 and socid.stage_minor == 8:
+            # Seems G12A/G12B/SM1 use this mode (tested: SM1)
+            self._download_amlc_data(self._cur_img, self._platform.UbootLoad)
+            logging.debug('BurnStepDownloadUboot: do: DownloadAMLC UBOOT ok')
+            pass
+        else:
+            # Other SoC use this mode (tested: AXG, GXL)
+            self._download_file(self._cur_img, self._platform.UbootLoad)
+            logging.debug('BurnStepDownloadUboot: do: Download UBOOT ok')
+            time.sleep(0.2)
 
-        socid = SocId(self._dev.identify())
-        if socid.stage_minor == SocId.STAGE_MINOR_IPL:
-            self._download_file(self._ddr_img,
-                                self._platform.DDRLoad,
-                                size=self._platform.DDRSize)
+            socid = SocId(self._dev.identify())
+            logging.debug(f'BurnStepDownloadUboot: do: soc state {socid.stage_major} {socid.stage_minor}')
+            if socid.stage_minor == SocId.STAGE_MINOR_IPL:
+                self._download_file(self._ddr_img,
+                                    self._platform.DDRLoad,
+                                    size=self._platform.DDRSize)
 
-        if self._platform.bl2ParaAddr:
-            self._update_ddr()
-            params_buf = pack('<IIIIIIIII',
-                              0x3412cdab, 0x200, 0xc0e1, 0, 0, 0, 1,
-                              self._platform.UbootLoad,
-                              self._cur_img.size())
-            self._write_para(params_buf)
+            if self._platform.bl2ParaAddr:
+                self._update_ddr()
+                params_buf = pack('<IIIIIIIII',
+                                  0x3412cdab, 0x200, 0xc0e1, 0, 0, 0, 1,
+                                  self._platform.UbootLoad,
+                                  self._cur_img.size())
+                self._write_para(params_buf)
 
-        socid = SocId(self._dev.identify())
-        self._run()
+            socid = SocId(self._dev.identify())
+            self._run()
 
         self._wait_device(False)
         self._wait_device()
@@ -625,8 +688,8 @@ class Platform:
             Platform.Parser('Platform:', self._cfg_parse_int, True, None),
             Platform.Parser('DDRLoad:', self._cfg_parse_int, True, None),
             Platform.Parser('DDRRun:', self._cfg_parse_int, True, None),
-            Platform.Parser('UbootLoad:', self._cfg_parse_int, False, '0'),
-            Platform.Parser('UbootRun:', self._cfg_parse_int, False, '0'),
+            Platform.Parser('UbootLoad:', self._cfg_parse_int, False, None),
+            Platform.Parser('UbootRun:', self._cfg_parse_int, False, None),
             Platform.Parser('BinPara:', self._cfg_parse_int, False, '0'),
             Platform.Parser('Uboot_down:', self._cfg_parse_int, False, '0'),
             Platform.Parser('Uboot_decomp:', self._cfg_parse_int, False, '0'),
@@ -660,15 +723,23 @@ class Platform:
                 logging.warning(f'Config value {cfg_item} not supported')
 
         for p in parsers:
-            if p.required:
+            logging.warning(f'Platform parser: Config value {p.pattern} not found')
+            if p.pattern == "UbootLoad:":
+                p.fn(p.pattern, p.pattern + str(self.DDRLoad))
+            elif p.pattern == "UbootRun:":
+                p.fn(p.pattern, p.pattern + str(self.DDRRun))
+            elif p.required:
                 raise ValueError(f'Required config {p.pattern} not found')
-
-            p.fn(p.pattern, p.pattern + p.defval)
+            else:
+                p.fn(p.pattern, p.pattern + p.defval)
+            logging.warning(f'Platform parser: Config value `{p.pattern}` fixed: `{hex(getattr(self, p.pattern[:-1]))}`')
 
 
 class SharedData:
     def __init__(self):
         self._progress_bar = None
+        self._encrypt_val = None
+        self._is_secure = None
 
     def progress(self, n=1):
         if self._progress_bar:
